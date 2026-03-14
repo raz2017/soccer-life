@@ -1,0 +1,22 @@
+# Visual Studio workspace state
+.vs/
+
+# User-specific project settings
+*.user
+
+# MSVC build outputs
+[Dd]ebug/
+[Rr]elease/
+x64/
+[Aa][Rr][Mm]64/
+
+# Common compiled artifacts
+*.obj
+*.pch
+*.pdb
+*.ilk
+*.idb
+*.exe
+*.lib
+*.exp
+
