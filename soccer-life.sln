@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.37012.4 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "game-of-life", "game-of-life.vcxproj", "{969F3EB6-BFB0-47D2-B1F5-BB3A4F6BF8FD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "soccer-life", "soccer-life.vcxproj", "{969F3EB6-BFB0-47D2-B1F5-BB3A4F6BF8FD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
