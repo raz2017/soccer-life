@@ -16,6 +16,7 @@ static const float BALL_DRAG = 0.992f;
 static const float KICK_POWER = 7.8f;
 static const float BUMP_POWER = 1.35f;
 static const float DRIBBLE_OFFSET = 14.0f;
+static const float SHOT_RELEASE_OFFSET = 22.0f;
 static const int GOAL_DEPTH = 24;
 static const int GOAL_HEIGHT = 170;
 static const float FIELD_MARGIN = 12.0f;
@@ -206,6 +207,28 @@ static void drawScore(SDL_Renderer* renderer, int redScore, int blueScore) {
 	fillRect(renderer, panelX + 18.0f, 148.0f, 48.0f, 4.0f, COLOR_LINE);
 }
 
+static void drawFps(SDL_Renderer* renderer, int fpsValue) {
+	Color panel = { 8, 16, 14, 170 };
+	int clampedFps = std::max(0, std::min(fpsValue, 999));
+	int hundreds = clampedFps / 100;
+	int tens = (clampedFps / 10) % 10;
+	int ones = clampedFps % 10;
+	float panelX = 18.0f;
+	float panelY = 250.0f;
+
+	fillRect(renderer, panelX, panelY, 104.0f, 52.0f, panel);
+
+	if (hundreds > 0) {
+		drawDigit(renderer, hundreds, panelX + 10.0f, panelY + 8.0f, COLOR_LINE);
+		drawDigit(renderer, tens, panelX + 38.0f, panelY + 8.0f, COLOR_LINE);
+		drawDigit(renderer, ones, panelX + 66.0f, panelY + 8.0f, COLOR_LINE);
+	}
+	else {
+		drawDigit(renderer, tens, panelX + 24.0f, panelY + 8.0f, COLOR_LINE);
+		drawDigit(renderer, ones, panelX + 52.0f, panelY + 8.0f, COLOR_LINE);
+	}
+}
+
 static void resetPositions(GameState& game, int kickoffDirection) {
 	game.leftPlayer.pos = Vector2(PITCH_CENTER_X, PITCH_CENTER_Y + 60.0f);
 	game.leftPlayer.vel = Vector2();
@@ -342,6 +365,12 @@ static void updateDribbleBall(const Player& player, Ball& ball) {
 	Vector2 facing = player.facing.magnitude() > 0.0f ? player.facing.normalized() : Vector2(0.0f, -1.0f);
 	ball.pos = player.pos + facing * DRIBBLE_OFFSET;
 	ball.vel = player.vel;
+}
+
+static void releaseShot(const Player& player, Ball& ball, Vector2 kickDir) {
+	Vector2 direction = kickDir.magnitude() > 0.0f ? kickDir.normalized() : Vector2(0.0f, -1.0f);
+	ball.pos = player.pos + direction * SHOT_RELEASE_OFFSET;
+	ball.vel = direction * KICK_POWER + player.vel * 0.35f;
 }
 
 static bool inGoalSpan(float x) {
@@ -499,11 +528,12 @@ static void update(GameState& game, SDL_Window* window, const bool* keys) {
 		updateDribbleBall(game.leftPlayer, game.ball);
 		Vector2 kickDir = game.leftPlayer.facing.magnitude() > 0.0f ? game.leftPlayer.facing.normalized() : Vector2(0.0f, -1.0f);
 		if (kickP1 && !game.kickLatchP1) {
-			game.ball.vel = kickDir * KICK_POWER + game.leftPlayer.vel * 0.35f;
+			releaseShot(game.leftPlayer, game.ball, kickDir);
 			game.possession = -1;
 			game.possessionCooldown = 8;
 			game.lastTouchTeam = 0;
 			game.kickLatchP1 = true;
+			updateBallPhysics(game.ball);
 		}
 		if (!kickP1) {
 			game.kickLatchP1 = false;
@@ -514,11 +544,12 @@ static void update(GameState& game, SDL_Window* window, const bool* keys) {
 		updateDribbleBall(game.rightPlayer, game.ball);
 		Vector2 kickDir = game.rightPlayer.facing.magnitude() > 0.0f ? game.rightPlayer.facing.normalized() : Vector2(0.0f, 1.0f);
 		if (kickP2 && !game.kickLatchP2) {
-			game.ball.vel = kickDir * KICK_POWER + game.rightPlayer.vel * 0.35f;
+			releaseShot(game.rightPlayer, game.ball, kickDir);
 			game.possession = -1;
 			game.possessionCooldown = 8;
 			game.lastTouchTeam = 1;
 			game.kickLatchP2 = true;
+			updateBallPhysics(game.ball);
 		}
 		if (!kickP2) {
 			game.kickLatchP2 = false;
@@ -617,7 +648,7 @@ static void drawBall(SDL_Renderer* renderer, const Ball& ball) {
 	fillCenteredRect(renderer, ball.pos.x, ball.pos.y, 3.0f, 3.0f, COLOR_DARK);
 }
 
-static void render(SDL_Renderer* renderer, const GameState& game) {
+static void render(SDL_Renderer* renderer, const GameState& game, bool showFps, int fpsValue) {
 	setColor(renderer, { 12, 40, 20, 255 });
 	SDL_RenderClear(renderer);
 
@@ -626,6 +657,9 @@ static void render(SDL_Renderer* renderer, const GameState& game) {
 	drawPlayer(renderer, game.rightPlayer);
 	drawBall(renderer, game.ball);
 	drawScore(renderer, game.leftPlayer.score, game.rightPlayer.score);
+	if (showFps) {
+		drawFps(renderer, fpsValue);
+	}
 
 	if (game.goalFlashTimer > 0) {
 		fillRect(renderer, 0.0f, 0.0f, static_cast<float>(WIDTH), static_cast<float>(HEIGHT), { 255, 255, 255, 60 });
@@ -669,7 +703,11 @@ int main(int argc, char* argv[]) {
 	updateWindowTitle(window, game);
 
 	bool running = true;
+	bool showFps = false;
+	int displayFps = 0;
+	int frameCounter = 0;
 	Uint64 lastTick = SDL_GetTicks();
+	Uint64 fpsSampleStart = lastTick;
 	const Uint64 frameMs = 1000 / FPS;
 
 	while (running) {
@@ -681,6 +719,9 @@ int main(int argc, char* argv[]) {
 			if (event.type == SDL_EVENT_KEY_DOWN) {
 				if (event.key.key == SDLK_ESCAPE) {
 					running = false;
+				}
+				if (event.key.key == SDLK_F7) {
+					showFps = !showFps;
 				}
 				if (event.key.key == SDLK_F8) {
 					toggleFullscreen(window);
@@ -711,7 +752,14 @@ int main(int argc, char* argv[]) {
 			lastTick = now;
 		}
 
-		render(renderer, game);
+		frameCounter++;
+		if (now - fpsSampleStart >= 1000) {
+			displayFps = static_cast<int>((frameCounter * 1000ULL) / (now - fpsSampleStart));
+			frameCounter = 0;
+			fpsSampleStart = now;
+		}
+
+		render(renderer, game, showFps, displayFps);
 		SDL_Delay(1);
 	}
 
